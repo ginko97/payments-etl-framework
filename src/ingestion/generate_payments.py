@@ -1,16 +1,23 @@
 from src.utils.config import settings
 from src.utils.logger import logger
+from src.utils.retry import retry_on_failure   # new import
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-def generate_payments(num_records: int = None):
+@retry_on_failure(max_retries=3, delay=2)
+def generate_payments(num_records: int = None, force_regenerate: bool = False):
     if num_records is None:
         num_records = settings.default_num_records
     
-    logger.info("Starting payments data generation", num_records=num_records)
+    logger.info("Starting payments data generation", num_records=num_records, force_regenerate=force_regenerate)
     
     settings.raw_path.mkdir(parents=True, exist_ok=True)
+    
+    existing_files = list(settings.raw_path.glob("date=*/payments_raw.parquet"))
+    if existing_files and not force_regenerate:
+        logger.info("Raw data already exists. Skipping generation (idempotent).")
+        return None
     
     df = pd.DataFrame({
         "transaction_id": [f"TX-{i:010d}" for i in range(num_records)],
